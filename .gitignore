@@ -1,0 +1,22 @@
+# Ignorar archivos generados por WordPress
+wordpress/*
+!wordpress/wp-content/
+
+# Dentro de wp-content, solo versionar nuestro plugin/tema de la quiniela
+wordpress/wp-content/*
+!wordpress/wp-content/plugins/
+!wordpress/wp-content/themes/
+
+wordpress/wp-content/plugins/*
+!wordpress/wp-content/plugins/quiniela-worldcup/
+
+wordpress/wp-content/themes/*
+!wordpress/wp-content/themes/quiniela-theme/
+
+# Ignorar datos locales y variables de entorno
+.env
+db_data/
+
+# Ignorar archivos de sistema
+.DS_Store
+*.log
