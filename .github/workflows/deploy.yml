@@ -2,13 +2,16 @@ name: CI/CD Quiniela Pipeline
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
 
 jobs:
+  # ============================================
+  # JOB 1: LINTER Y VALIDACIÓN DE CÓDIGO (CI)
+  # ============================================
   lint-and-test:
-    name: 🧪 Linter y Validación de Código
+    name: 🧹 Linter y Validación de Código
     runs-on: ubuntu-latest
 
     steps:
@@ -18,12 +21,23 @@ jobs:
       - name: Configurar entorno PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: '8.2'
 
       - name: Validar sintaxis de archivos PHP (Linter)
         run: |
           find wordpress/wp-content/plugins/quiniela-worldcup -name "*.php" -exec php -l {} \;
 
+      - name: Verificar estructura del proyecto
+        run: |
+          echo "✅ Verificando archivos críticos..."
+          test -f docker-compose.yml && echo "  ✓ docker-compose.yml existe"
+          test -f nginx/default.conf && echo "  ✓ nginx/default.conf existe"
+          test -f wordpress/wp-content/plugins/quiniela-worldcup/quiniela-worldcup.php && echo "  ✓ Plugin existe"
+          echo "✅ Estructura válida"
+
+  # ============================================
+  # JOB 2: DESPLIEGUE AUTOMÁTICO (CD)
+  # ============================================
   deploy:
     name: 🚀 Despliegue Automático al Servidor
     needs: lint-and-test
@@ -34,15 +48,25 @@ jobs:
       - name: Checkout del repositorio
         uses: actions/checkout@v3
 
-      - name: Configurar clave SSH para el servidor
-        uses: webfactory/ssh-agent@v0.8.0
+      # 🔑 NUEVO: Conectar el runner a Tailscale
+      - name: Conectar a Tailscale
+        uses: tailscale/github-action@v2
         with:
-          ssh-private-key: ${{ secrets.SSH_KEY }}
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Verificar conectividad con la MV
+        run: |
+          echo "🔍 Probando conexión SSH a ${{ secrets.SSH_HOST }}..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo '✅ Conexión exitosa desde GitHub Actions'"
 
       - name: Sincronizar código con el Servidor (rsync)
         run: |
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-          rsync -avz --exclude='.git' --exclude='.github' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}
+          rsync -avz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='db_data' \
+            --exclude='wordpress/wp-content/uploads' \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/
 
       - name: Ejecutar comandos de actualización en el Servidor
         uses: appleboy/ssh-action@v0.1.10
@@ -53,3 +77,4 @@ jobs:
           script: |
             cd ${{ secrets.TARGET_DIR }}
             docker-compose up -d --build
+            echo "✅ Despliegue completado"
