@@ -15,8 +15,14 @@ services:
       MYSQL_PASSWORD: quiniela_password
     volumes:
       - db_data:/var/lib/mysql
+      - db_backups:/backups
     networks:
       - quiniela-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ============================================
   # WORDPRESS (PHP-FPM)
@@ -26,7 +32,8 @@ services:
     container_name: quiniela_wp
     restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       WORDPRESS_DB_HOST: db:3306
       WORDPRESS_DB_NAME: quiniela_db
@@ -34,6 +41,7 @@ services:
       WORDPRESS_DB_PASSWORD: quiniela_password
     volumes:
       - ./wordpress:/var/www/html
+      - wp_uploads:/var/www/html/wp-content/uploads
     networks:
       - quiniela-network
 
@@ -49,8 +57,133 @@ services:
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./wordpress:/var/www/html
+      - wp_uploads:/var/www/html/wp-content/uploads
     depends_on:
       - wordpress
+    networks:
+      - quiniela-network
+
+  # ============================================
+  # BACKUP AUTOMÁTICO (cron job)
+  # ============================================
+  backup:
+    image: mariadb:10.11
+    container_name: quiniela_backup
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - db_backups:/backups
+      - ./scripts/backup-db.sh:/backup-db.sh
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        chmod +x /backup-db.sh
+        echo "0 2 * * * /backup-db.sh >> /var/log/backup.log 2>&1" | crontab -
+        crond -f -l 8
+
+  # ============================================
+  # MINIO: Almacenamiento de objetos (S3 compatible)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: quiniela_minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minio_secure_password
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    volumes:
+      - minio_data:/data
+    networks:
+      - quiniela-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  
+    # ============================================
+  # PROMETHEUS: Recolección de métricas
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: quiniela_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - quiniela-network
+
+  # ============================================
+  # GRAFANA: Visualización de métricas
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: quiniela_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: grafana_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - quiniela-network
+
+  # ============================================
+  # CADVISOR: Métricas de contenedores
+  # ============================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: quiniela_cadvisor
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - quiniela-network
+
+  # ============================================
+  # NODE EXPORTER: Métricas del servidor
+  # ============================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: quiniela_node_exporter
+    restart: always
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     networks:
       - quiniela-network
 
@@ -59,6 +192,11 @@ services:
 # ============================================
 volumes:
   db_data:
+  db_backups:
+  wp_uploads:
+  minio_data:
+  prometheus_data:
+  grafana_data:
 
 # ============================================
 # RED PRIVADA
