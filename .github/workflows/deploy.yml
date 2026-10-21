@@ -72,6 +72,10 @@ jobs:
         run: |
           echo "🔄 Sincronizando archivos..."
           rsync -avz \
+            --omit-dir-times \
+            --no-perms \
+            --no-owner \
+            --no-group \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='node_modules' \
