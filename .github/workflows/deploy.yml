@@ -1,6 +1,5 @@
 name: CI/CD Quiniela Pipeline
 
-
 on:
   push:
     branches: [ "main" ]
@@ -52,7 +51,7 @@ jobs:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
       # ============================================
-      # PASO 2: Configurar clave SSH (ANTES de usar SSH)
+      # PASO 2: Configurar clave SSH
       # ============================================
       - name: Configurar clave SSH para el servidor
         uses: webfactory/ssh-agent@v0.8.0
@@ -71,7 +70,7 @@ jobs:
       # ============================================
       - name: Sincronizar código con el Servidor (rsync)
         run: |
-          echo " Sincronizando archivos con ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/"
+          echo "🔄 Sincronizando archivos..."
           rsync -avz \
             --exclude='.git' \
             --exclude='.github' \
@@ -81,6 +80,7 @@ jobs:
 
       # ============================================
       # PASO 5: Ejecutar comandos en el servidor
+      # IMPORTANTE: Usar "docker compose" (con espacio) en lugar de "docker-compose"
       # ============================================
       - name: Ejecutar comandos de actualización en el Servidor
         uses: appleboy/ssh-action@v0.1.10
@@ -92,9 +92,11 @@ jobs:
             echo "🚀 Iniciando despliegue..."
             cd ${{ secrets.TARGET_DIR }}
             echo "📁 Directorio: $(pwd)"
-            echo "🐳 Deteniendo contenedores..."
-            docker-compose down || true
+            echo "🐳 Versión de Docker: $(docker --version)"
+            echo " Versión de Docker Compose: $(docker compose version)"
+            echo " Deteniendo contenedores..."
+            docker compose down || true
             echo "🐳 Iniciando contenedores..."
-            docker-compose up -d --build
+            docker compose up -d --build
             echo "✅ Despliegue completado"
-            docker-compose ps
+            docker compose ps
