@@ -43,31 +43,44 @@ jobs:
         uses: actions/checkout@v3
 
       # ============================================
-      # PASO DE TAILSCALE (NUEVO)
+      # PASO 1: Conectar a Tailscale
       # ============================================
       - name: Conectar a Tailscale
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Verificar conectividad con la MV
-        run: |
-          echo " Probando conexión SSH a ${{ secrets.SSH_HOST }}..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo '✅ Conexión exitosa'"
-
       # ============================================
-      # PASOS DE DESPLIEGUE
+      # PASO 2: Configurar clave SSH (ANTES de usar SSH)
       # ============================================
       - name: Configurar clave SSH para el servidor
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
-      - name: Sincronizar código con el Servidor (rsync)
+      # ============================================
+      # PASO 3: Agregar host a known_hosts
+      # ============================================
+      - name: Agregar host a known_hosts
         run: |
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-          rsync -avz --exclude='.git' --exclude='.github' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/
 
+      # ============================================
+      # PASO 4: Sincronizar código con rsync
+      # ============================================
+      - name: Sincronizar código con el Servidor (rsync)
+        run: |
+          echo " Sincronizando archivos con ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/"
+          rsync -avz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/
+          echo "✅ Sincronización completada"
+
+      # ============================================
+      # PASO 5: Ejecutar comandos en el servidor
+      # ============================================
       - name: Ejecutar comandos de actualización en el Servidor
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -75,5 +88,12 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            echo "🚀 Iniciando despliegue..."
             cd ${{ secrets.TARGET_DIR }}
+            echo "📁 Directorio: $(pwd)"
+            echo "🐳 Deteniendo contenedores..."
+            docker-compose down || true
+            echo "🐳 Iniciando contenedores..."
             docker-compose up -d --build
+            echo "✅ Despliegue completado"
+            docker-compose ps
