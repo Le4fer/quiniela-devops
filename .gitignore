@@ -19,4 +19,5 @@ db_data/
 
 # Ignorar archivos de sistema
 .DS_Store
-*.log
+*.logdocker-compose.yml.backup
+*.backup
