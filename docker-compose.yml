@@ -65,7 +65,7 @@ services:
   # UPTIME KUMA: Monitoreo de disponibilidad
   # ============================================
   uptime-kuma:
-    image: louislam/uptime-kuma:1.30.2
+    image: louislam/uptime-kuma:1
     container_name: quiniela_uptime_kuma
     restart: always
     ports:
