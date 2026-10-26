@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   # ============================================
-  # BASE DE DATOS: MariaDB
+  # 1. BASE DE DATOS: MariaDB
   # ============================================
   db:
     image: mariadb:10.11
@@ -15,17 +13,17 @@ services:
       MYSQL_PASSWORD: quiniela_password
     volumes:
       - db_data:/var/lib/mysql
-      - db_backups:/backups
     networks:
       - quiniela-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_secure_password"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   # ============================================
-  # WORDPRESS (PHP-FPM)
+  # 2. WORDPRESS (PHP-FPM)
   # ============================================
   wordpress:
     image: wordpress:6.4-php8.2-fpm-alpine
@@ -46,7 +44,7 @@ services:
       - quiniela-network
 
   # ============================================
-  # PROXY INVERSO: Nginx
+  # 3. PROXY INVERSO: Nginx
   # ============================================
   webserver:
     image: nginx:alpine
@@ -64,55 +62,10 @@ services:
       - quiniela-network
 
   # ============================================
-  # BACKUP AUTOMÁTICO (cron job)
-  # ============================================
-  backup:
-    image: mariadb:10.11
-    container_name: quiniela_backup
-    restart: always
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - db_backups:/backups
-      - ./scripts/backup-db.sh:/backup-db.sh
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        chmod +x /backup-db.sh
-        echo "0 2 * * * /backup-db.sh >> /var/log/backup.log 2>&1" | crontab -
-        crond -f -l 8
-
-  # ============================================
-  # MINIO: Almacenamiento de objetos (S3 compatible)
-  # ============================================
-  minio:
-    image: minio/minio:latest
-    container_name: quiniela_minio
-    restart: always
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minio_secure_password
-    ports:
-      - "9000:9000"  # API
-      - "9001:9001"  # Console
-    volumes:
-      - minio_data:/data
-    networks:
-      - quiniela-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  
-    # ============================================
-  # PROMETHEUS: Recolección de métricas
+  # 4. PROMETHEUS: Recolección de métricas
   # ============================================
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.0
     container_name: quiniela_prometheus
     restart: always
     ports:
@@ -123,17 +76,15 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
     networks:
       - quiniela-network
 
   # ============================================
-  # GRAFANA: Visualización de métricas
+  # 5. GRAFANA: Visualización de métricas
   # ============================================
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.0
     container_name: quiniela_grafana
     restart: always
     ports:
@@ -150,10 +101,10 @@ services:
       - quiniela-network
 
   # ============================================
-  # CADVISOR: Métricas de contenedores
+  # 6. CADVISOR: Métricas de contenedores
   # ============================================
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: quiniela_cadvisor
     restart: always
     ports:
@@ -164,14 +115,17 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
     networks:
       - quiniela-network
 
   # ============================================
-  # NODE EXPORTER: Métricas del servidor
+  # 7. NODE EXPORTER: Métricas del servidor
   # ============================================
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.7.0
     container_name: quiniela_node_exporter
     restart: always
     ports:
@@ -187,14 +141,36 @@ services:
     networks:
       - quiniela-network
 
+  # ============================================
+  # 8. BACKUP AUTOMÁTICO
+  # ============================================
+  backup:
+    image: alpine:latest
+    container_name: quiniela_backup
+    restart: always
+    depends_on:
+      - db
+    volumes:
+      - db_backups:/backups
+      - ./scripts/backup-db.sh:/backup-db.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache docker-cli mysql-client
+        chmod +x /backup-db.sh
+        echo "0 2 * * * /backup-db.sh >> /var/log/backup.log 2>&1" | crontab -
+        crond -f -l 8
+    networks:
+      - quiniela-network
+
 # ============================================
 # VOLÚMENES PERSISTENTES
 # ============================================
 volumes:
   db_data:
-  db_backups:
   wp_uploads:
-  minio_data:
+  db_backups:
   prometheus_data:
   grafana_data:
 

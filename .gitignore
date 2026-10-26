@@ -21,3 +21,24 @@ db_data/
 .DS_Store
 *.logdocker-compose.yml.backup
 *.backup
+
+# Credenciales y datos sensibles
+.env
+wp-config.php
+*.sql
+*.sql.gz
+
+# Datos de base de datos
+db_data/
+
+# Logs
+*.log
+/var/log/
+
+# Backups
+/backups/
+*.tar.gz
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
