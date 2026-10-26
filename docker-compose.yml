@@ -62,6 +62,22 @@ services:
       - quiniela-network
 
   # ============================================
+  # UPTIME KUMA: Monitoreo de disponibilidad
+  # ============================================
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: quiniela_uptime_kuma
+    restart: always
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - quiniela-network
+    depends_on:
+      - grafana
+
+  # ============================================
   # 4. PROMETHEUS: Recolección de métricas
   # ============================================
   prometheus:
@@ -171,6 +187,7 @@ volumes:
   db_data:
   wp_uploads:
   db_backups:
+  uptime_kuma_data:
   prometheus_data:
   grafana_data:
 
