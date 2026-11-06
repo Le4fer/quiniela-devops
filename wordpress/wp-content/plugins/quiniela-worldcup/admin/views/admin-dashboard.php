@@ -1,6 +1,8 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+global $wpdb;
+
 $admin = QWC_Admin::get_instance();
 $stats = $admin->get_stats();
 $tournaments = $admin->get_tournaments();
@@ -57,11 +59,10 @@ $tournaments = $admin->get_tournaments();
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($tournaments as $t): ?>
-                    <?php $teams_count = $wpdb->get_var($wpdb->prepare(
-                        "SELECT COUNT(*) FROM {$admin->tables['teams']} WHERE tournament_id = %d",
-                        $t->id
-                    )); ?>
+                <?php foreach ($tournaments as $t): 
+                    // Usar el método del admin en vez de $wpdb directo
+                    $teams_count = count($admin->get_teams_by_tournament($t->id));
+                ?>
                     <tr>
                         <td><strong><?php echo esc_html($t->name); ?></strong></td>
                         <td><?php echo esc_html(ucfirst($t->type)); ?></td>
