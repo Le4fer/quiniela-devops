@@ -37,6 +37,8 @@ class QWC_Admin {
         add_action('admin_post_qwc_delete_tournament', array($this, 'handle_delete_tournament'));
         add_action('admin_post_qwc_save_team', array($this, 'handle_save_team'));
         add_action('admin_post_qwc_delete_team', array($this, 'handle_delete_team'));
+        add_action('admin_post_qwc_save_group', array($this, 'handle_save_group'));      // ← AÑADIR
+        add_action('admin_post_qwc_delete_group', array($this, 'handle_delete_group'));  // ← AÑADIR
         add_action('admin_post_qwc_save_match', array($this, 'handle_save_match'));
         add_action('admin_post_qwc_delete_match', array($this, 'handle_delete_match'));
         add_action('admin_post_qwc_save_settings', array($this, 'handle_save_settings'));
@@ -592,5 +594,103 @@ class QWC_Admin {
      */
     public function register_post_types() {
         // Reservado para futuras extensiones
+    }
+
+        /**
+     * Procesar guardado de grupo
+     */
+    public function handle_save_group() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_save_group');
+
+        global $wpdb;
+
+        $tournament_id = intval($_POST['tournament_id']);
+        $group_name = strtoupper(sanitize_text_field($_POST['group_name']));
+        $sort_order = intval($_POST['sort_order']);
+
+        // Verificar si ya existe un grupo con ese nombre en este torneo
+        $exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$this->tables['groups']} WHERE tournament_id = %d AND name = %s",
+            $tournament_id,
+            $group_name
+        ));
+
+        if ($exists) {
+            wp_redirect(add_query_arg(array(
+                'page'    => 'qwc-teams',
+                'tournament' => $tournament_id,
+                'error'   => urlencode('El grupo ' . $group_name . ' ya existe'),
+            ), admin_url('admin.php')));
+            exit;
+        }
+
+        $wpdb->insert(
+            $this->tables['groups'],
+            array(
+                'tournament_id' => $tournament_id,
+                'name'          => $group_name,
+                'sort_order'    => $sort_order,
+                'created_at'    => current_time('mysql'),
+            )
+        );
+
+        wp_redirect(add_query_arg(array(
+            'page'      => 'qwc-teams',
+            'tournament' => $tournament_id,
+            'message'   => urlencode('Grupo ' . $group_name . ' creado correctamente'),
+        ), admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Procesar eliminación de grupo
+     */
+    public function handle_delete_group() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_delete_group');
+
+        global $wpdb;
+        $group_id = intval($_POST['group_id']);
+        $tournament_id = intval($_POST['tournament_id']);
+
+        // Eliminar el grupo (los equipos quedan sin grupo)
+        $wpdb->delete($this->tables['groups'], array('id' => $group_id));
+
+        wp_redirect(add_query_arg(array(
+            'page'      => 'qwc-teams',
+            'tournament' => $tournament_id,
+            'message'   => urlencode('Grupo eliminado'),
+        ), admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Generar automáticamente grupos para un torneo
+     */
+    public function generate_groups($tournament_id, $num_groups = 8) {
+        global $wpdb;
+
+        $groups = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L');
+        
+        for ($i = 0; $i < $num_groups && $i < count($groups); $i++) {
+            $wpdb->insert(
+                $this->tables['groups'],
+                array(
+                    'tournament_id' => $tournament_id,
+                    'name'          => $groups[$i],
+                    'sort_order'    => $i + 1,
+                    'created_at'    => current_time('mysql'),
+                )
+            );
+        }
+
+        return $num_groups;
     }
 }
