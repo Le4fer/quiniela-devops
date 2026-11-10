@@ -42,6 +42,7 @@ class QWC_Admin {
         add_action('admin_post_qwc_save_match', array($this, 'handle_save_match'));
         add_action('admin_post_qwc_delete_match', array($this, 'handle_delete_match'));
         add_action('admin_post_qwc_save_settings', array($this, 'handle_save_settings'));
+        add_action('admin_post_qwc_generate_matches', array($this, 'handle_generate_matches'));
     }
 
     /**
@@ -692,5 +693,74 @@ class QWC_Admin {
         }
 
         return $num_groups;
+    }
+
+        /**
+     * Auto-generar partidos de fase de grupos (Round Robin)
+     */
+    public function handle_generate_matches() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_generate_matches');
+
+        global $wpdb;
+        $tournament_id = intval($_POST['tournament_id']);
+        $groups = $this->get_groups_by_tournament($tournament_id);
+
+        if (empty($groups)) {
+            wp_redirect(add_query_arg(array(
+                'page'      => 'qwc-matches',
+                'tournament' => $tournament_id,
+                'error'     => urlencode('No hay grupos creados para este torneo.'),
+            ), admin_url('admin.php')));
+            exit;
+        }
+
+        $matches_created = 0;
+
+        foreach ($groups as $group) {
+            // Obtener equipos de este grupo
+            $teams = $wpdb->get_results($wpdb->prepare(
+                "SELECT id FROM {$this->tables['teams']} WHERE group_id = %d ORDER BY id ASC",
+                $group->id
+            ));
+
+            if (count($teams) < 2) continue;
+
+            // Generar combinaciones (Round Robin: todos contra todos)
+            for ($i = 0; $i < count($teams); $i++) {
+                for ($j = $i + 1; $j < count($teams); $j++) {
+                    $home_team = $teams[$i]->id;
+                    $away_team = $teams[$j]->id;
+
+                    // Fecha por defecto: primer día del torneo + offset aleatorio para simular calendario
+                    $match_date = date('Y-m-d H:i:s', strtotime($group->tournament_id ? 'now + ' . ($matches_created * 2) . ' hours' : 'now'));
+
+                    $wpdb->insert(
+                        $this->tables['matches'],
+                        array(
+                            'tournament_id' => $tournament_id,
+                            'group_id'      => $group->id,
+                            'round'         => 'Fase de Grupos',
+                            'home_team_id'  => $home_team,
+                            'away_team_id'  => $away_team,
+                            'match_date'    => $match_date,
+                            'status'        => 'scheduled',
+                            'created_at'    => current_time('mysql'),
+                        )
+                    );
+                    $matches_created++;
+                }
+            }
+        }
+
+        wp_redirect(add_query_arg(array(
+            'page'      => 'qwc-matches',
+            'tournament' => $tournament_id,
+            'message'   => urlencode("Se generaron {$matches_created} partidos de fase de grupos automáticamente."),
+        ), admin_url('admin.php')));
+        exit;
     }
 }
