@@ -1,15 +1,7 @@
 <?php
-/**
- * Clase para el frontend público
- * TODO: Implementar funcionalidad completa
- */
-
-if (!defined('ABSPATH')) {
-    exit;
-}
+if (!defined('ABSPATH')) exit;
 
 class QWC_Public {
-
     private static $instance = null;
 
     public static function get_instance() {
@@ -20,6 +12,15 @@ class QWC_Public {
     }
 
     private function __construct() {
-        // TODO: Registrar hooks de frontend
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_assets'));
+    }
+
+    public function enqueue_assets() {
+        wp_enqueue_style(
+            'qwc-public',
+            QWC_PLUGIN_URL . 'public/css/public.css',
+            array(),
+            QWC_VERSION
+        );
     }
 }

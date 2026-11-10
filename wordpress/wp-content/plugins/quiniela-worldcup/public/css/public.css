@@ -1,0 +1,91 @@
+.qwc-public-matches {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.qwc-match-card {
+    background: #fff;
+    border: 1px solid #e2e4e7;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.qwc-match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.qwc-match-date {
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.qwc-match-teams {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.qwc-team {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.qwc-team:last-child {
+    flex-direction: row-reverse;
+    text-align: right;
+}
+
+.qwc-team-name {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.qwc-match-score {
+    font-size: 20px;
+    font-weight: bold;
+    color: #646970;
+    padding: 0 20px;
+}
+
+.qwc-prediction-form {
+    background: #f6f7f7;
+    padding: 15px;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.qwc-score-inputs {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+.qwc-score-inputs input[type="number"] {
+    width: 60px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    padding: 8px;
+}
+
+.qwc-score-inputs span {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.qwc-login-prompt {
+    text-align: center;
+    color: #646970;
+    font-style: italic;
+}

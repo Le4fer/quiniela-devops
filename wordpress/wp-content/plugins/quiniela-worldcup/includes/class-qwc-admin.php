@@ -43,6 +43,8 @@ class QWC_Admin {
         add_action('admin_post_qwc_delete_match', array($this, 'handle_delete_match'));
         add_action('admin_post_qwc_save_settings', array($this, 'handle_save_settings'));
         add_action('admin_post_qwc_generate_matches', array($this, 'handle_generate_matches'));
+        add_action('admin_post_qwc_save_prediction', array($this, 'handle_save_prediction'));
+        add_action('admin_post_nopriv_qwc_save_prediction', array($this, 'handle_save_prediction')); // Por seguridad, aunque validamos is_user_logged_in
     }
 
     /**
@@ -761,6 +763,97 @@ class QWC_Admin {
             'tournament' => $tournament_id,
             'message'   => urlencode("Se generaron {$matches_created} partidos de fase de grupos automáticamente."),
         ), admin_url('admin.php')));
+        exit;
+    }
+
+        /**
+     * Procesar guardado de pronóstico desde el frontend
+     */
+    public function handle_save_prediction() {
+        // Verificar que el usuario esté logueado
+        if (!is_user_logged_in()) {
+            wp_die('Debes iniciar sesión para hacer un pronóstico.');
+        }
+
+        check_admin_referer('qwc_save_prediction');
+
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $match_id = intval($_POST['match_id']);
+        $tournament_id = intval($_POST['tournament_id']);
+        $home_score = intval($_POST['home_score']);
+        $away_score = intval($_POST['away_score']);
+
+        // Validar que el partido esté programado
+        $match = $wpdb->get_row($wpdb->prepare(
+            "SELECT status FROM {$this->tables['matches']} WHERE id = %d",
+            $match_id
+        ));
+
+        if (!$match || $match->status !== 'scheduled') {
+            wp_die('Este partido ya no acepta pronósticos.');
+        }
+
+        // Obtener o crear el usuario de la quiniela
+        $wp_user = get_userdata($user_id);
+        $qwc_user = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$this->tables['users']} WHERE wp_user_id = %d",
+            $user_id
+        ));
+
+        if (!$qwc_user) {
+            $wpdb->insert(
+                $this->tables['users'],
+                array(
+                    'wp_user_id'   => $user_id,
+                    'display_name' => $wp_user->display_name,
+                    'email'        => $wp_user->user_email,
+                    'total_points' => 0,
+                    'created_at'   => current_time('mysql'),
+                )
+            );
+            $qwc_user_id = $wpdb->insert_id;
+        } else {
+            $qwc_user_id = $qwc_user->id;
+        }
+
+        // Insertar o actualizar pronóstico
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$this->tables['predictions']} WHERE user_id = %d AND match_id = %d",
+            $qwc_user_id, $match_id
+        ));
+
+        if ($existing) {
+            $wpdb->update(
+                $this->tables['predictions'],
+                array(
+                    'home_score' => $home_score,
+                    'away_score' => $away_score,
+                    'updated_at' => current_time('mysql'),
+                ),
+                array('id' => $existing)
+            );
+            $message = 'Pronóstico actualizado correctamente.';
+        } else {
+            $wpdb->insert(
+                $this->tables['predictions'],
+                array(
+                    'user_id'       => $qwc_user_id,
+                    'match_id'      => $match_id,
+                    'tournament_id' => $tournament_id,
+                    'home_score'    => $home_score,
+                    'away_score'    => $away_score,
+                    'points_earned' => 0,
+                    'created_at'    => current_time('mysql'),
+                )
+            );
+            $message = 'Pronóstico guardado correctamente.';
+        }
+
+        // Redirigir de vuelta a la página de partidos con mensaje
+        wp_redirect(add_query_arg(array(
+            'qwc_message' => urlencode($message),
+        ), get_permalink()));
         exit;
     }
 }
