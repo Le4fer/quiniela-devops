@@ -15,6 +15,17 @@ class QWC_Shortcodes {
         global $wpdb;
         $tables = QWC_Database::get_tables();
         
+        // Mostrar mensaje de éxito si existe
+        $user_id = get_current_user_id();
+        $message = get_transient('qwc_prediction_message_' . $user_id);
+        if ($message) {
+            delete_transient('qwc_prediction_message_' . $user_id);
+            $html_message = '<div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 12px; border-radius: 4px; margin-bottom: 20px;">✓ ' . esc_html($message) . '</div>';
+        } else {
+            $html_message = '';
+        }
+        
+        
         // Obtener torneo activo por defecto
         $tournament_id = get_option('qwc_default_tournament', 0);
         

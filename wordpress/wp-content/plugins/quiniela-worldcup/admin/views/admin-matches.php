@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 $admin = QWC_Admin::get_instance();
-$tables = $admin->tables;
+$tables = $admin->get_tables();
 
 $tournaments = $admin->get_tournaments();
 $selected_tournament = isset($_GET['tournament']) ? intval($_GET['tournament']) : (get_option('qwc_default_tournament', 0));

@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 $admin = QWC_Admin::get_instance();
-$tables = $admin->tables;
+$tables = $admin->get_tables();
 
 // Obtener torneos
 $tournaments = $admin->get_tournaments();

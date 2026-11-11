@@ -1,4 +1,4 @@
-<?php
+init<?php
 /**
  * Clase principal del Panel de Administración
  */
@@ -11,6 +11,10 @@ class QWC_Admin {
 
     private static $instance = null;
     private $tables;
+
+    public function get_tables() {
+        return $this->tables;
+    }
 
     public static function get_instance() {
         if (null === self::$instance) {
@@ -766,16 +770,19 @@ class QWC_Admin {
         exit;
     }
 
-        /**
+    /**
      * Procesar guardado de pronóstico desde el frontend
      */
     public function handle_save_prediction() {
         // Verificar que el usuario esté logueado
         if (!is_user_logged_in()) {
-            wp_die('Debes iniciar sesión para hacer un pronóstico.');
+            wp_die('Debes iniciar sesión para hacer un pronóstico.', 'Acceso denegado', array('response' => 403));
         }
 
-        check_admin_referer('qwc_save_prediction');
+        // Verificar nonce
+        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'qwc_save_prediction')) {
+            wp_die('Error de seguridad. Por favor intenta de nuevo.', 'Error', array('response' => 400));
+        }
 
         global $wpdb;
         $user_id = get_current_user_id();
@@ -784,18 +791,31 @@ class QWC_Admin {
         $home_score = intval($_POST['home_score']);
         $away_score = intval($_POST['away_score']);
 
-        // Validar que el partido esté programado
+        // Validar que el partido exista y esté programado
         $match = $wpdb->get_row($wpdb->prepare(
-            "SELECT status FROM {$this->tables['matches']} WHERE id = %d",
+            "SELECT status, match_date FROM {$this->tables['matches']} WHERE id = %d",
             $match_id
         ));
 
-        if (!$match || $match->status !== 'scheduled') {
-            wp_die('Este partido ya no acepta pronósticos.');
+        if (!$match) {
+            wp_die('El partido no existe.', 'Error', array('response' => 404));
+        }
+
+        if ($match->status !== 'scheduled') {
+            wp_die('Este partido ya no acepta pronósticos.', 'Error', array('response' => 400));
+        }
+
+        // Verificar que el partido no haya empezado
+        if (strtotime($match->match_date) <= current_time('timestamp')) {
+            wp_die('El partido ya comenzó o está en vivo. No se aceptan más pronósticos.', 'Error', array('response' => 400));
         }
 
         // Obtener o crear el usuario de la quiniela
         $wp_user = get_userdata($user_id);
+        if (!$wp_user) {
+            wp_die('Usuario no encontrado.', 'Error', array('response' => 404));
+        }
+
         $qwc_user = $wpdb->get_row($wpdb->prepare(
             "SELECT id FROM {$this->tables['users']} WHERE wp_user_id = %d",
             $user_id
@@ -847,13 +867,15 @@ class QWC_Admin {
                     'created_at'    => current_time('mysql'),
                 )
             );
-            $message = 'Pronóstico guardado correctamente.';
+            $message = '¡Pronóstico guardado correctamente!';
         }
 
-        // Redirigir de vuelta a la página de partidos con mensaje
-        wp_redirect(add_query_arg(array(
-            'qwc_message' => urlencode($message),
-        ), get_permalink()));
+        // Redirigir con mensaje de éxito usando sesión temporal
+        set_transient('qwc_prediction_message_' . $user_id, $message, 30);
+        
+        // Redirigir a la página de partidos
+        $redirect_url = home_url('/partidos/');
+        wp_safe_redirect($redirect_url);
         exit;
     }
 }
