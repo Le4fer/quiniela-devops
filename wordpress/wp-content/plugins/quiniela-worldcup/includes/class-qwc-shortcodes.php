@@ -15,19 +15,28 @@ class QWC_Shortcodes {
         global $wpdb;
         $tables = QWC_Database::get_tables();
         
-        // Mostrar mensaje de éxito si existe
-        $user_id = get_current_user_id();
-        $message = get_transient('qwc_prediction_message_' . $user_id);
-        if ($message) {
-            delete_transient('qwc_prediction_message_' . $user_id);
-            $html_message = '<div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 12px; border-radius: 4px; margin-bottom: 20px;">✓ ' . esc_html($message) . '</div>';
-        } else {
-            $html_message = '';
+        // Mostrar mensaje de éxito/error si existe
+        $html = '';
+        if (isset($_GET['qwc_message'])) {
+            $message = sanitize_text_field($_GET['qwc_message']);
+            $status = isset($_GET['qwc_status']) && $_GET['qwc_status'] === 'success' ? 'success' : 'error';
+            
+            $html .= '<div class="qwc-notice notice notice-' . esc_attr($status) . ' is-dismissible" style="margin-bottom: 20px; padding: 12px; border-left: 4px solid ' . ($status === 'success' ? '#00a32a' : '#d63638') . '; background: #fff;">';
+            $html .= '<p style="margin: 0;">' . esc_html($message) . '</p>';
+            $html .= '</div>';
+            
+            // Limpiar los parámetros de la URL para que no se queden mostrando
+            echo '<script>
+                if (window.history.replaceState) {
+                    var newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                    window.history.replaceState({path: newUrl}, "", newUrl);
+                }
+            </script>';
         }
-        
         
         // Obtener torneo activo por defecto
         $tournament_id = get_option('qwc_default_tournament', 0);
+        if (!$tournament_id) return $html . '<p>No hay un torneo activo configurado.</p>';
         
         // Si no hay torneo por defecto, obtener el primero disponible
         if (!$tournament_id) {
@@ -132,12 +141,13 @@ class QWC_Shortcodes {
             $html .= '</div>';
             $html .= '</div>';
 
-            // Formulario de pronóstico (solo si está programado y usuario logueado)
+            // Formulario de pronóstico
             if ($user_id && $m->status === 'scheduled') {
                 $html .= '<form method="post" action="' . admin_url('admin-post.php') . '" class="qwc-prediction-form">';
                 $html .= '<input type="hidden" name="action" value="qwc_save_prediction">';
                 $html .= '<input type="hidden" name="match_id" value="' . intval($m->id) . '">';
                 $html .= '<input type="hidden" name="tournament_id" value="' . intval($tournament_id) . '">';
+                $html .= '<input type="hidden" name="redirect_url" value="' . esc_url(get_permalink()) . '">';
                 $html .= wp_nonce_field('qwc_save_prediction', '_wpnonce', true, false);
                 
                 $home_val = $prediction ? intval($prediction->home_score) : '';
