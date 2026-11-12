@@ -1,4 +1,4 @@
-init<?php
+<?php
 /**
  * Clase principal del Panel de Administración
  */
