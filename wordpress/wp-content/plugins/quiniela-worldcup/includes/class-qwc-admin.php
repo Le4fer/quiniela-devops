@@ -49,6 +49,7 @@ class QWC_Admin {
         add_action('admin_post_qwc_generate_matches', array($this, 'handle_generate_matches'));
         add_action('admin_post_qwc_save_prediction', array($this, 'handle_save_prediction'));
         add_action('admin_post_nopriv_qwc_save_prediction', array($this, 'handle_save_prediction')); // Por seguridad, aunque validamos is_user_logged_in
+        add_action('admin_post_qwc_update_live_result', array($this, 'handle_update_live_result'));
     }
 
     /**
@@ -101,6 +102,15 @@ class QWC_Admin {
             'manage_options',
             'qwc-matches',
             array($this, 'render_matches')
+        );
+
+        add_submenu_page(
+            'quiniela-worldcup',
+            'Resultados en Vivo',
+            '🔴 En Vivo',
+            'manage_options',
+            'qwc-live-results',
+            array($this, 'render_live_results')
         );
 
         add_submenu_page(
@@ -186,6 +196,13 @@ class QWC_Admin {
      */
     public function render_matches() {
         include QWC_PLUGIN_DIR . 'admin/views/admin-matches.php';
+    }
+
+    /**
+    * Renderizar Resultados en Vivo
+    */
+    public function render_live_results() {
+        include QWC_PLUGIN_DIR . 'admin/views/admin-live-results.php';
     }
 
     /**
@@ -866,4 +883,64 @@ class QWC_Admin {
         wp_safe_redirect($redirect_url);
         exit; // ← IMPORTANTE: Siempre exit después de redirect
     }
+
+        /**
+     * Procesar actualización de resultado en vivo / final
+     */
+    public function handle_update_live_result() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_update_live_result');
+
+        global $wpdb;
+        $match_id       = intval($_POST['match_id']);
+        $status         = sanitize_text_field($_POST['status']);
+        $home_score     = (isset($_POST['home_score']) && $_POST['home_score'] !== '') ? intval($_POST['home_score']) : null;
+        $away_score     = (isset($_POST['away_score']) && $_POST['away_score'] !== '') ? intval($_POST['away_score']) : null;
+        $current_minute = !empty($_POST['current_minute']) ? intval($_POST['current_minute']) : null;
+
+        $data = array('status' => $status);
+        if ($home_score !== null) $data['home_score'] = $home_score;
+        if ($away_score !== null) $data['away_score'] = $away_score;
+        $data['current_minute'] = $current_minute;
+        $data['updated_at']     = current_time('mysql');
+
+        $wpdb->update($this->tables['matches'], $data, array('id' => $match_id));
+
+        // Si el partido FINALIZÓ → calcular puntos y guardar resultado oficial
+        if ($status === 'finished' && $home_score !== null && $away_score !== null) {
+            $this->calculate_predictions_points($match_id);
+
+            // Guardar en tabla de resultados oficiales
+            $existing_result = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$this->tables['results']} WHERE match_id = %d",
+                $match_id
+            ));
+
+            $result_data = array(
+                'match_id'   => $match_id,
+                'home_score' => $home_score,
+                'away_score' => $away_score,
+            );
+
+            if ($existing_result) {
+                $wpdb->update($this->tables['results'], $result_data, array('id' => $existing_result));
+            } else {
+                $wpdb->insert($this->tables['results'], $result_data);
+            }
+
+            $message = 'Partido finalizado. Puntos recalculados para todos los pronósticos. ✅';
+        } else {
+            $message = 'Estado del partido actualizado.';
+        }
+
+        wp_redirect(add_query_arg(array(
+            'page'    => 'qwc-live-results',
+            'message' => urlencode($message),
+        ), admin_url('admin.php')));
+        exit;
+    }
+
 }

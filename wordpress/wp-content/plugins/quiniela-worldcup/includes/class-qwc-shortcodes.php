@@ -14,160 +14,90 @@ class QWC_Shortcodes {
     public static function render_matches($atts) {
         global $wpdb;
         $tables = QWC_Database::get_tables();
-        
-        // Mostrar mensaje de éxito/error si existe
-        $html = '';
-        if (isset($_GET['qwc_message'])) {
-            $message = sanitize_text_field($_GET['qwc_message']);
-            $status = isset($_GET['qwc_status']) && $_GET['qwc_status'] === 'success' ? 'success' : 'error';
-            
-            $html .= '<div class="qwc-notice notice notice-' . esc_attr($status) . ' is-dismissible" style="margin-bottom: 20px; padding: 12px; border-left: 4px solid ' . ($status === 'success' ? '#00a32a' : '#d63638') . '; background: #fff;">';
-            $html .= '<p style="margin: 0;">' . esc_html($message) . '</p>';
-            $html .= '</div>';
-            
-            // Limpiar los parámetros de la URL para que no se queden mostrando
-            echo '<script>
-                if (window.history.replaceState) {
-                    var newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-                    window.history.replaceState({path: newUrl}, "", newUrl);
-                }
-            </script>';
-        }
-        
-        // Obtener torneo activo por defecto
         $tournament_id = get_option('qwc_default_tournament', 0);
-        if (!$tournament_id) return $html . '<p>No hay un torneo activo configurado.</p>';
-        
-        // Si no hay torneo por defecto, obtener el primero disponible
-        if (!$tournament_id) {
-            $tournament_id = $wpdb->get_var("SELECT id FROM {$tables['tournaments']} LIMIT 1");
-            if ($tournament_id) {
-                update_option('qwc_default_tournament', $tournament_id);
-            }
-        }
-        
-        if (!$tournament_id) {
-            return '<div class="qwc-notice qwc-error"><strong>⚠️ Error:</strong> No hay torneos disponibles. Contacta al administrador.</div>';
-        }
+        if (!$tournament_id) return '<p>No hay un torneo activo configurado.</p>';
 
-        // Obtener partidos
         $matches = $wpdb->get_results($wpdb->prepare(
             "SELECT m.*, 
                     ht.name as home_name, ht.code as home_code, ht.flag_url as home_flag,
-                    at.name as away_name, at.code as away_code, at.flag_url as away_flag,
-                    g.name as group_name
+                    at.name as away_name, at.code as away_code, at.flag_url as away_flag
              FROM {$tables['matches']} m
              LEFT JOIN {$tables['teams']} ht ON m.home_team_id = ht.id
              LEFT JOIN {$tables['teams']} at ON m.away_team_id = at.id
-             LEFT JOIN {$tables['groups']} g ON m.group_id = g.id
-             WHERE m.tournament_id = %d 
-             AND m.status IN ('scheduled', 'live')
+             WHERE m.tournament_id = %d AND m.status IN ('scheduled', 'live')
              ORDER BY m.match_date ASC",
             $tournament_id
         ));
 
-        // Debug: mostrar información si es admin
-        $html = '';
-        if (current_user_can('administrator') && isset($_GET['qwc_debug'])) {
-            $html .= '<div style="background: #fff3cd; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">';
-            $html .= '<strong>🔍 Debug Info:</strong><br>';
-            $html .= 'Tournament ID: ' . intval($tournament_id) . '<br>';
-            $html .= 'Total Matches: ' . count($matches) . '<br>';
-            $html .= 'User ID: ' . get_current_user_id() . '<br>';
-            $html .= 'Is Logged In: ' . (is_user_logged_in() ? 'Yes' : 'No');
-            $html .= '</div>';
-        }
-
         if (empty($matches)) {
-            $html .= '<div class="qwc-notice qwc-info">';
-            $html .= '<strong>📋 No hay partidos programados</strong><br>';
-            $html .= '<small>No hay partidos con estado "scheduled" o "live" para este torneo.</small>';
-            if (current_user_can('administrator')) {
-                $html .= '<br><a href="' . admin_url('admin.php?page=qwc-matches&tournament=' . $tournament_id) . '" class="button">Ir a gestionar partidos</a>';
-            }
-            $html .= '</div>';
-            return $html;
+            return '<p>No hay partidos programados próximamente.</p>';
         }
 
         $user_id = get_current_user_id();
-        $html .= '<div class="qwc-public-matches">';
-        $html .= '<h2> Próximos Partidos</h2>';
+        $qwc_user_id = 0;
+        if ($user_id) {
+            $qwc_user = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM {$tables['users']} WHERE wp_user_id = %d",
+                $user_id
+            ));
+            if ($qwc_user) $qwc_user_id = $qwc_user->id;
+        }
+
+        $html = '<div class="qwc-public-matches">';
+        $html .= '<h2>📅 Próximos Partidos</h2>';
 
         foreach ($matches as $m) {
-            // Verificar si el usuario ya hizo pronóstico
             $prediction = null;
-            if ($user_id) {
-                $qwc_user = $wpdb->get_row($wpdb->prepare(
-                    "SELECT id FROM {$tables['users']} WHERE wp_user_id = %d",
-                    $user_id
+            if ($qwc_user_id) {
+                $prediction = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM {$tables['predictions']} WHERE user_id = %d AND match_id = %d",
+                    $qwc_user_id, $m->id
                 ));
-                if ($qwc_user) {
-                    $prediction = $wpdb->get_row($wpdb->prepare(
-                        "SELECT * FROM {$tables['predictions']} WHERE user_id = %d AND match_id = %d",
-                        $qwc_user->id, $m->id
-                    ));
-                }
             }
 
-            $html .= '<div class="qwc-match-card">';
-            
-            // Header con fecha y grupo
+            $html .= '<div class="qwc-match-card" data-match-id="' . intval($m->id) . '">';
             $html .= '<div class="qwc-match-header">';
             $html .= '<span class="qwc-match-date">📅 ' . date('d/m/Y H:i', strtotime($m->match_date)) . '</span>';
-            if ($m->group_name) {
-                $html .= '<span class="qwc-badge">Grupo ' . esc_html($m->group_name) . '</span>';
-            }
-            if ($m->status === 'live') {
-                $html .= '<span class="qwc-badge qwc-badge-live">🔴 EN VIVO - Min ' . intval($m->current_minute) . "'</span>";
-            }
+            $html .= '<span class="qwc-live-status qwc-badge qwc-badge-' . esc_attr($m->status) . '">';
+            $html .= $m->status === 'live' ? '🔴 EN VIVO' : esc_html(ucfirst($m->status));
+            $html .= '</span>';
             $html .= '</div>';
 
-            // Equipos
             $html .= '<div class="qwc-match-teams">';
             $html .= '<div class="qwc-team">';
-            if ($m->home_flag) {
-                $html .= '<img src="' . esc_url($m->home_flag) . '" class="qwc-flag" alt="' . esc_attr($m->home_code) . '">';
-            }
+            if ($m->home_flag) $html .= '<img src="' . esc_url($m->home_flag) . '" class="qwc-flag">';
             $html .= '<span class="qwc-team-name">' . esc_html($m->home_name) . '</span>';
             $html .= '</div>';
 
-            $html .= '<div class="qwc-match-score">VS</div>';
+            $html .= '<div class="qwc-match-score qwc-live-score">VS</div>';
 
             $html .= '<div class="qwc-team">';
-            if ($m->away_flag) {
-                $html .= '<img src="' . esc_url($m->away_flag) . '" class="qwc-flag" alt="' . esc_attr($m->away_code) . '">';
-            }
+            if ($m->away_flag) $html .= '<img src="' . esc_url($m->away_flag) . '" class="qwc-flag">';
             $html .= '<span class="qwc-team-name">' . esc_html($m->away_name) . '</span>';
             $html .= '</div>';
             $html .= '</div>';
 
-            // Formulario de pronóstico
             if ($user_id && $m->status === 'scheduled') {
                 $html .= '<form method="post" action="' . admin_url('admin-post.php') . '" class="qwc-prediction-form">';
                 $html .= '<input type="hidden" name="action" value="qwc_save_prediction">';
                 $html .= '<input type="hidden" name="match_id" value="' . intval($m->id) . '">';
                 $html .= '<input type="hidden" name="tournament_id" value="' . intval($tournament_id) . '">';
-                $html .= '<input type="hidden" name="redirect_url" value="' . esc_url(get_permalink()) . '">';
                 $html .= wp_nonce_field('qwc_save_prediction', '_wpnonce', true, false);
-                
+
                 $home_val = $prediction ? intval($prediction->home_score) : '';
                 $away_val = $prediction ? intval($prediction->away_score) : '';
-
-                if ($prediction) {
-                    $html .= '<p style="margin-bottom: 10px; color: #646970; font-size: 13px;">️ Tu pronóstico actual:</p>';
-                }
 
                 $html .= '<div class="qwc-score-inputs">';
                 $html .= '<input type="number" name="home_score" min="0" max="20" value="' . esc_attr($home_val) . '" placeholder="0" required>';
                 $html .= '<span>-</span>';
                 $html .= '<input type="number" name="away_score" min="0" max="20" value="' . esc_attr($away_val) . '" placeholder="0" required>';
-                $html .= '<button type="submit" class="button button-primary">' . ($prediction ? 'Actualizar' : 'Guardar') . ' Pronóstico</button>';
+                $html .= '<button type="submit" class="button button-primary">' . ($prediction ? 'Actualizar Pronóstico' : 'Guardar Pronóstico') . '</button>';
                 $html .= '</div>';
                 $html .= '</form>';
             } elseif (!$user_id) {
-                $html .= '<p class="qwc-login-prompt">🔐 <a href="' . wp_login_url(get_permalink()) . '">Inicia sesión</a> para hacer tu pronóstico.</p>';
+                $html .= '<p class="qwc-login-prompt"><a href="' . wp_login_url(get_permalink()) . '">Inicia sesión</a> para hacer tu pronóstico.</p>';
             } elseif ($m->status === 'live') {
-                $html .= '<p class="qwc-notice qwc-live">🔴 El partido está en vivo. Los pronósticos están cerrados.</p>';
+                $html .= '<p class="qwc-notice">🔴 El partido está en vivo. Pronósticos cerrados.</p>';
             }
 
             $html .= '</div>';
@@ -224,50 +154,37 @@ class QWC_Shortcodes {
     public static function render_standings($atts) {
         global $wpdb;
         $tables = QWC_Database::get_tables();
-        
-        $tournament_id = get_option('qwc_default_tournament', 0);
-        if (!$tournament_id) {
-            return '<p>No hay torneo activo.</p>';
-        }
-        
-        // Obtener usuarios con sus puntos
-        $users = $wpdb->get_results($wpdb->prepare(
-            "SELECT u.*, wu.display_name, wu.user_email 
-             FROM {$tables['users']} u
-             LEFT JOIN {$wpdb->users} wu ON u.wp_user_id = wu.ID
-             WHERE EXISTS (
-                 SELECT 1 FROM {$tables['predictions']} p 
-                 WHERE p.user_id = u.id AND p.tournament_id = %d
-             )
-             ORDER BY u.total_points DESC, u.created_at ASC",
-            $tournament_id
-        ));
-        
+
+        $users = $wpdb->get_results(
+            "SELECT u.*, 
+                    (SELECT COUNT(*) FROM {$tables['predictions']} p WHERE p.user_id = u.id) as num_predictions
+             FROM {$tables['users']} u 
+             ORDER BY u.total_points DESC, num_predictions DESC"
+        );
+
         if (empty($users)) {
-            return '<p>Aún no hay participantes con pronósticos.</p>';
+            return '<p>🏆 Aún no hay participantes. ¡Sé el primero en hacer pronósticos!</p>';
         }
-        
+
+        $medals = array(1 => '🥇', 2 => '🥈', 3 => '🥉');
+
         $html = '<div class="qwc-standings">';
         $html .= '<h2>🏆 Tabla de Posiciones</h2>';
-        $html .= '<table class="qwc-table">';
+        $html .= '<table class="qwc-standings-table">';
         $html .= '<thead><tr><th>#</th><th>Usuario</th><th>Pronósticos</th><th>Puntos</th></tr></thead>';
         $html .= '<tbody>';
-        
-        $rank = 1;
-        foreach ($users as $user) {
-            $predictions_count = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$tables['predictions']} WHERE user_id = %d AND tournament_id = %d",
-                $user->id, $tournament_id
-            ));
-            
+
+        foreach ($users as $index => $u) {
+            $rank = $index + 1;
+            $medal = isset($medals[$rank]) ? $medals[$rank] : $rank;
             $html .= '<tr>';
-            $html .= '<td><strong>' . $rank++ . '</strong></td>';
-            $html .= '<td>' . esc_html($user->display_name) . '</td>';
-            $html .= '<td>' . intval($predictions_count) . '</td>';
-            $html .= '<td><strong style="color: #00a32a;">' . number_format($user->total_points, 1) . '</strong></td>';
+            $html .= '<td>' . $medal . '</td>';
+            $html .= '<td><strong>' . esc_html($u->display_name) . '</strong></td>';
+            $html .= '<td>' . intval($u->num_predictions) . '</td>';
+            $html .= '<td class="qwc-points">' . number_format(floatval($u->total_points), 1) . '</td>';
             $html .= '</tr>';
         }
-        
+
         $html .= '</tbody></table></div>';
         return $html;
     }

@@ -22,5 +22,19 @@ class QWC_Public {
             array(),
             QWC_VERSION
         );
+
+        wp_enqueue_script(
+            'qwc-public',
+            QWC_PLUGIN_URL . 'public/js/public.js',
+            array(),
+            QWC_VERSION,
+            true
+        );
+
+        wp_localize_script('qwc-public', 'qwcPublic', array(
+            'restUrl'       => esc_url_raw(rest_url()),
+            'tournamentId'  => intval(get_option('qwc_default_tournament', 0)),
+            'updateInterval'=> intval(get_option('qwc_live_update_interval', 30)),
+        ));
     }
 }

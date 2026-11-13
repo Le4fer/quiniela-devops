@@ -108,3 +108,132 @@
     color: #646970;
     font-style: italic;
 }
+
+/* Resultados en vivo */
+.qwc-live-score {
+    font-size: 24px;
+    font-weight: bold;
+    color: #d63638;
+}
+
+.qwc-live-status {
+    font-size: 12px;
+}
+
+/* Tabla de posiciones */
+.qwc-standings {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.qwc-standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.qwc-standings-table th,
+.qwc-standings-table td {
+    padding: 14px 16px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.qwc-standings-table th {
+    background: #1d2327;
+    color: #fff;
+    font-weight: 600;
+}
+
+.qwc-standings-table tr:first-child td {
+    background: #fffbea;
+}
+
+.qwc-standings-table .qwc-points {
+    color: #00a32a;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* Dashboard público */
+.qwc-dash-stats {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.qwc-dash-stat {
+    background: #fff;
+    border: 1px solid #e2e4e7;
+    border-radius: 8px;
+    padding: 20px 30px;
+    text-align: center;
+    min-width: 150px;
+}
+
+.qwc-dash-stat .stat-num {
+    display: block;
+    font-size: 32px;
+    font-weight: bold;
+    color: #2271b1;
+}
+
+.qwc-dash-stat .stat-num.points {
+    color: #00a32a;
+}
+
+.qwc-dash-stat .stat-lbl {
+    display: block;
+    color: #646970;
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+/* Admin live cards */
+.qwc-live-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-left: 4px solid #d63638;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.qwc-live-header {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.qwc-live-teams {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+.qwc-live-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    background: #f6f7f7;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.qwc-live-form label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.qwc-live-form input[type="number"] {
+    width: 60px;
+}
