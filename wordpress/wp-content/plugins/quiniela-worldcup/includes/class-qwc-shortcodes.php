@@ -190,60 +190,9 @@ class QWC_Shortcodes {
     }
 
     public static function render_groups($atts) {
-        global $wpdb;
-        $tables = QWC_Database::get_tables();
-        
-        $tournament_id = get_option('qwc_default_tournament', 0);
-        if (!$tournament_id) {
-            return '<p>No hay torneo activo.</p>';
-        }
-        
-        $groups = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$tables['groups']} WHERE tournament_id = %d ORDER BY sort_order",
-            $tournament_id
-        ));
-        
-        if (empty($groups)) {
-            return '<p>No hay grupos configurados para este torneo.</p>';
-        }
-        
-        $html = '<div class="qwc-groups">';
-        $html .= '<h2>📊 Fase de Grupos</h2>';
-        
-        foreach ($groups as $group) {
-            $html .= '<div class="qwc-group" style="margin-bottom: 30px;">';
-            $html .= '<h3>Grupo ' . esc_html($group->name) . '</h3>';
-            
-            // Obtener equipos de este grupo
-            $teams = $wpdb->get_results($wpdb->prepare(
-                "SELECT * FROM {$tables['teams']} WHERE group_id = %d ORDER BY name",
-                $group->id
-            ));
-            
-            if (empty($teams)) {
-                $html .= '<p>No hay equipos en este grupo.</p>';
-            } else {
-                $html .= '<table class="qwc-table">';
-                $html .= '<thead><tr><th>Equipo</th><th>Código</th></tr></thead>';
-                $html .= '<tbody>';
-                foreach ($teams as $team) {
-                    $html .= '<tr>';
-                    $html .= '<td>';
-                    if ($team->flag_url) {
-                        $html .= '<img src="' . esc_url($team->flag_url) . '" class="qwc-flag" style="margin-right: 8px;">';
-                    }
-                    $html .= esc_html($team->name) . '</td>';
-                    $html .= '<td><code>' . esc_html($team->code) . '</code></td>';
-                    $html .= '</tr>';
-                }
-                $html .= '</tbody></table>';
-            }
-            
-            $html .= '</div>';
-        }
-        
-        $html .= '</div>';
-        return $html;
+        ob_start();
+        include QWC_PLUGIN_DIR . 'public/views/public-groups.php';
+        return ob_get_clean();
     }
 
     public static function render_legacy_board($atts) {

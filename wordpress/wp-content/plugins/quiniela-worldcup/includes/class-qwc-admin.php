@@ -50,6 +50,9 @@ class QWC_Admin {
         add_action('admin_post_qwc_save_prediction', array($this, 'handle_save_prediction'));
         add_action('admin_post_nopriv_qwc_save_prediction', array($this, 'handle_save_prediction')); // Por seguridad, aunque validamos is_user_logged_in
         add_action('admin_post_qwc_update_live_result', array($this, 'handle_update_live_result'));
+        add_action('admin_post_qwc_generate_knockout', array($this, 'handle_generate_knockout'));
+        add_action('admin_post_qwc_advance_knockout', array($this, 'handle_advance_knockout'));
+
     }
 
     /**
@@ -102,6 +105,15 @@ class QWC_Admin {
             'manage_options',
             'qwc-matches',
             array($this, 'render_matches')
+        );
+
+        add_submenu_page(
+            'quiniela-worldcup',
+            'Fase Eliminatoria',
+            '🏆 Eliminatoria',
+            'manage_options',
+            'qwc-knockout',
+            array($this, 'render_knockout')
         );
 
         add_submenu_page(
@@ -196,6 +208,13 @@ class QWC_Admin {
      */
     public function render_matches() {
         include QWC_PLUGIN_DIR . 'admin/views/admin-matches.php';
+    }
+
+    /**
+     * Renderizar Fase Eliminatoria
+     */
+    public function render_knockout() {
+        include QWC_PLUGIN_DIR . 'admin/views/admin-knockout.php';
     }
 
     /**
@@ -940,6 +959,73 @@ class QWC_Admin {
             'page'    => 'qwc-live-results',
             'message' => urlencode($message),
         ), admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Generar fase eliminatoria
+     */
+    public function handle_generate_knockout() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_generate_knockout');
+
+        $tournament_id = intval($_POST['tournament_id']);
+        $num_groups = intval($_POST['num_groups']);
+
+        // Incluir la clase Knockout
+        require_once QWC_PLUGIN_DIR . 'includes/class-qwc-knockout.php';
+
+        $result = QWC_Knockout::generate($tournament_id, $num_groups, 2);
+
+        if (isset($result['error'])) {
+            wp_redirect(add_query_arg(array(
+                'page'      => 'qwc-knockout',
+                'tournament' => $tournament_id,
+                'error'     => urlencode($result['error']),
+            ), admin_url('admin.php')));
+        } else {
+            wp_redirect(add_query_arg(array(
+                'page'      => 'qwc-knockout',
+                'tournament' => $tournament_id,
+                'message'   => urlencode("✅ Fase eliminatoria generada: {$result['total']} partidos creados."),
+            ), admin_url('admin.php')));
+        }
+        exit;
+    }
+
+    /**
+     * Avanzar ganadores a la siguiente ronda
+     */
+    public function handle_advance_knockout() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_advance_knockout');
+
+        $tournament_id = intval($_POST['tournament_id']);
+        $current_round = sanitize_text_field($_POST['current_round']);
+
+        require_once QWC_PLUGIN_DIR . 'includes/class-qwc-knockout.php';
+
+        $result = QWC_Knockout::advance_winners($tournament_id, $current_round);
+
+        if (isset($result['error'])) {
+            wp_redirect(add_query_arg(array(
+                'page'      => 'qwc-knockout',
+                'tournament' => $tournament_id,
+                'error'     => urlencode($result['error']),
+            ), admin_url('admin.php')));
+        } else {
+            wp_redirect(add_query_arg(array(
+                'page'      => 'qwc-knockout',
+                'tournament' => $tournament_id,
+                'message'   => urlencode("✅ {$result['winners']} ganadores avanzaron a {$result['next_round']}."),
+            ), admin_url('admin.php')));
+        }
         exit;
     }
 
