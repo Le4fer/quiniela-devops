@@ -31,6 +31,7 @@ class QWC_Database {
             'results'      => $prefix . 'results',
             'leagues'      => $prefix . 'leagues',
             'league_members' => $prefix . 'league_members',
+            'champions'    => $prefix . 'champions',
         );
     }
 
@@ -259,5 +260,65 @@ class QWC_Database {
         }
 
         return true;
+    }
+
+    /**
+     * Migrar schema para Fase 5.6 (Historial)
+     * Se ejecuta automáticamente al detectar versión anterior
+     */
+    public static function migrate_to_v1_1() {
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+        $tables = self::get_tables();
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+        // 1. Añadir campo is_archived a tournaments (si no existe)
+        $column_exists = $wpdb->get_results(
+            "SHOW COLUMNS FROM {$tables['tournaments']} LIKE 'is_archived'"
+        );
+
+        if (empty($column_exists)) {
+            $wpdb->query(
+                "ALTER TABLE {$tables['tournaments']} 
+                 ADD COLUMN is_archived tinyint(1) NOT NULL DEFAULT 0 AFTER status"
+            );
+        }
+
+        // 2. Añadir campo champion_team_id a tournaments
+        $column_exists = $wpdb->get_results(
+            "SHOW COLUMNS FROM {$tables['tournaments']} LIKE 'champion_team_id'"
+        );
+
+        if (empty($column_exists)) {
+            $wpdb->query(
+                "ALTER TABLE {$tables['tournaments']} 
+                 ADD COLUMN champion_team_id bigint(20) DEFAULT NULL AFTER is_archived,
+                 ADD COLUMN runner_up_team_id bigint(20) DEFAULT NULL AFTER champion_team_id,
+                 ADD COLUMN top_scorer_team_id bigint(20) DEFAULT NULL AFTER runner_up_team_id,
+                 ADD COLUMN notes text AFTER top_scorer_team_id"
+            );
+        }
+
+        // 3. Crear tabla de campeones históricos
+        $sql = "CREATE TABLE IF NOT EXISTS {$tables['champions']} (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            tournament_id bigint(20) NOT NULL,
+            champion_team_id bigint(20) NOT NULL,
+            runner_up_team_id bigint(20) DEFAULT NULL,
+            third_place_team_id bigint(20) DEFAULT NULL,
+            top_scorer_team_id bigint(20) DEFAULT NULL,
+            top_scorer_goals int(5) DEFAULT 0,
+            mvp_team_id bigint(20) DEFAULT NULL,
+            notes text,
+            archived_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY tournament_id (tournament_id),
+            KEY champion_team_id (champion_team_id)
+        ) $charset_collate;";
+        dbDelta($sql);
+
+        // Actualizar versión del schema
+        update_option('qwc_schema_version', '1.1.0');
     }
 }

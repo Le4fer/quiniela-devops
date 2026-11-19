@@ -22,6 +22,9 @@ class QWC_Activator {
         // Establecer opciones por defecto
         self::set_default_options();
 
+        // Ejecutar migración a v1.1 (historial)
+        QWC_Database::migrate_to_v1_1();
+
         // Limpiar caché de rewrites
         flush_rewrite_rules();
     }
