@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 $admin = QWC_Admin::get_instance();
-$tables = $admin->tables;
+$tables = $admin->get_tables();
 
 $tournaments = $admin->get_tournaments();
 $selected_tournament = isset($_GET['tournament']) ? intval($_GET['tournament']) : (get_option('qwc_default_tournament', 0));
@@ -127,10 +127,25 @@ if ($selected_tournament) {
 
             <?php
             // Detectar la ronda actual con partidos pendientes
+            // Detectar la ronda actual: la PRIMERA ronda que tenga partidos SIN resultado final
+            // y que tenga equipos definidos (no placeholders con home_team_id = 0)
             $current_round = $wpdb->get_var($wpdb->prepare(
-                "SELECT DISTINCT round FROM {$tables['matches']} 
-                 WHERE tournament_id = %d AND group_id IS NULL AND status IN ('scheduled','live')
-                 ORDER BY match_date ASC LIMIT 1",
+                "SELECT DISTINCT m.round 
+                 FROM {$tables['matches']} m
+                 WHERE m.tournament_id = %d 
+                   AND m.group_id IS NULL 
+                   AND m.status IN ('scheduled','live')
+                   AND m.home_team_id > 0
+                   AND m.away_team_id > 0
+                 ORDER BY 
+                   CASE m.round
+                     WHEN 'Octavos de Final' THEN 1
+                     WHEN 'Cuartos de Final' THEN 2
+                     WHEN 'Semifinal' THEN 3
+                     WHEN 'Final' THEN 4
+                     ELSE 5
+                   END ASC
+                 LIMIT 1",
                 $selected_tournament
             ));
 

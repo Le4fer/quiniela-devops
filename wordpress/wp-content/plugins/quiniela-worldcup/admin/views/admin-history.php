@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) exit;
 require_once QWC_PLUGIN_DIR . 'includes/class-qwc-history.php';
 
 $admin = QWC_Admin::get_instance();
-$tables = $admin->tables;
+$tables = $admin->get_tables();
 $tournaments = $admin->get_tournaments();
 
 $archived = QWC_History::get_archived_tournaments();

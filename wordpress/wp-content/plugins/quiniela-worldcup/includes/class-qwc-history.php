@@ -177,16 +177,32 @@ class QWC_History {
     /**
      * Desarchivar un torneo (para correcciones)
      */
+    /**
+     * Desarchivar un torneo (para correcciones)
+     */
     public static function unarchive_tournament($tournament_id) {
         global $wpdb;
         $tables = QWC_Database::get_tables();
 
+        // 1. Reactivar el torneo
         $wpdb->update(
             $tables['tournaments'],
-            array('is_archived' => 0, 'status' => 'finished'),
+            array('is_archived' => 0, 'status' => 'active'),
             array('id' => $tournament_id)
         );
 
+        // 2. Revertir partidos cancelled a scheduled (SOLO los de eliminatoria sin resultado)
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$tables['matches']} 
+             SET status = 'scheduled' 
+             WHERE tournament_id = %d 
+             AND status = 'cancelled' 
+             AND group_id IS NULL
+             AND home_score IS NULL",
+            $tournament_id
+        ));
+
+        // 3. Eliminar registro de campeón
         $wpdb->delete($tables['champions'], array('tournament_id' => $tournament_id));
 
         return true;

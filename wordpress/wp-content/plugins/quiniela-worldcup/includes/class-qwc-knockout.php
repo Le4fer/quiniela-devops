@@ -21,6 +21,19 @@ class QWC_Knockout {
         global $wpdb;
         $tables = QWC_Database::get_tables();
 
+                // Verificar si ya existe una eliminatoria para este torneo
+        $existing_knockout = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$tables['matches']} 
+             WHERE tournament_id = %d AND group_id IS NULL",
+            $tournament_id
+        ));
+
+        if ($existing_knockout > 0) {
+            return array('error' => "Ya existe una fase eliminatoria para este torneo ({$existing_knockout} partidos). Elimínala primero si quieres regenerarla.");
+        }
+
+        
+
         // 1. Obtener clasificados
         $qualifiers = QWC_Standings::get_qualifiers($tournament_id, $per_group);
 
@@ -160,11 +173,14 @@ class QWC_Knockout {
      * Avanzar ganadores a la siguiente ronda
      * Se ejecuta cuando todos los partidos de una ronda están finalizados
      */
+    /**
+     * Avanzar ganadores a la siguiente ronda
+     */
     public static function advance_winners($tournament_id, $current_round) {
         global $wpdb;
         $tables = QWC_Database::get_tables();
 
-        // Obtener partidos finalizados de la ronda actual
+        // 1. Obtener partidos finalizados de la ronda actual
         $matches = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$tables['matches']} 
              WHERE tournament_id = %d AND round = %s AND status = 'finished'
@@ -172,30 +188,29 @@ class QWC_Knockout {
             $tournament_id, $current_round
         ));
 
-        if (empty($matches)) return array('error' => 'No hay partidos finalizados en esta ronda.');
+        if (empty($matches)) {
+            return array('error' => 'No hay partidos finalizados en esta ronda.');
+        }
 
-        // Verificar que TODOS los partidos de la ronda estén finalizados
+        // 2. Verificar que TODOS los partidos de la ronda estén finalizados
         $total_in_round = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tables['matches']} WHERE tournament_id = %d AND round = %s",
+            "SELECT COUNT(*) FROM {$tables['matches']} 
+             WHERE tournament_id = %d AND round = %s",
             $tournament_id, $current_round
         ));
 
         if (count($matches) < $total_in_round) {
-            return array('error' => "Aún faltan partidos por finalizar en {$current_round}.");
+            $pending = $total_in_round - count($matches);
+            return array('error' => "Aún faltan {$pending} partidos por finalizar en {$current_round}.");
         }
 
-        // Obtener partidos de la siguiente ronda (con equipos pendientes)
+        // 3. Determinar siguiente ronda
         $next_round = self::get_next_round($current_round);
-        if (!$next_round) return array('error' => 'No hay siguiente ronda (torneo finalizado).');
+        if (!$next_round) {
+            return array('error' => 'No hay siguiente ronda. ¡El torneo ha finalizado!');
+        }
 
-        $next_matches = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$tables['matches']} 
-             WHERE tournament_id = %d AND round = %s AND home_team_id = 0
-             ORDER BY match_date ASC",
-            $tournament_id, $next_round
-        ));
-
-        // Emparejar ganadores: partido 1 y 2 → siguiente partido 1, etc.
+        // 4. Obtener ganadores en orden
         $winners = array();
         foreach ($matches as $m) {
             if ($m->home_score > $m->away_score) {
@@ -203,27 +218,53 @@ class QWC_Knockout {
             } elseif ($m->away_score > $m->home_score) {
                 $winners[] = $m->away_team_id;
             } else {
-                // Empate en eliminatoria → penales (se define manualmente)
-                return array('error' => "Hay un empate en {$current_round}. Define el ganador manualmente.");
+                return array('error' => "Hay un empate en {$current_round} ({$m->home_team_id} vs {$m->away_team_id}). Define el ganador manualmente editando el partido.");
             }
         }
 
-        // Asignar ganadores a los partidos de la siguiente ronda
+        // 5. Obtener partidos de la siguiente ronda
+        $next_matches = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$tables['matches']} 
+             WHERE tournament_id = %d AND round = %s
+             ORDER BY match_date ASC",
+            $tournament_id, $next_round
+        ));
+
+        if (empty($next_matches)) {
+            return array('error' => "No existen partidos creados para {$next_round}.");
+        }
+
+        // 6. Asignar ganadores a los partidos de la siguiente ronda
+        //    Emparejamiento: ganador[0] vs ganador[1] → partido[0], ganador[2] vs ganador[3] → partido[1], etc.
+        $assigned = 0;
         for ($i = 0; $i < count($next_matches); $i++) {
-            if (isset($winners[$i * 2]) && isset($winners[$i * 2 + 1])) {
+            $home_idx = $i * 2;
+            $away_idx = $i * 2 + 1;
+
+            if (isset($winners[$home_idx]) && isset($winners[$away_idx])) {
                 $wpdb->update(
                     $tables['matches'],
                     array(
-                        'home_team_id' => $winners[$i * 2],
-                        'away_team_id' => $winners[$i * 2 + 1],
+                        'home_team_id' => $winners[$home_idx],
+                        'away_team_id' => $winners[$away_idx],
                         'extra_info'   => null,
                     ),
                     array('id' => $next_matches[$i]->id)
                 );
+                $assigned++;
             }
         }
 
-        return array('success' => true, 'next_round' => $next_round, 'winners' => count($winners));
+        if ($assigned === 0) {
+            return array('error' => 'No se pudo asignar ganadores. Verifica que haya suficientes partidos en la siguiente ronda.');
+        }
+
+        return array(
+            'success'    => true,
+            'next_round' => $next_round,
+            'winners'    => count($winners),
+            'assigned'   => $assigned,
+        );
     }
 
     /**
