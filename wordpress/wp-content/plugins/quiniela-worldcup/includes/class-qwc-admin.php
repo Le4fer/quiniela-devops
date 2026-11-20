@@ -52,7 +52,8 @@ class QWC_Admin {
         add_action('admin_post_qwc_update_live_result', array($this, 'handle_update_live_result'));
         add_action('admin_post_qwc_generate_knockout', array($this, 'handle_generate_knockout'));
         add_action('admin_post_qwc_advance_knockout', array($this, 'handle_advance_knockout'));
-
+        add_action('admin_post_qwc_archive_tournament', array($this, 'handle_archive_tournament'));
+        add_action('admin_post_qwc_unarchive_tournament', array($this, 'handle_unarchive_tournament'));
     }
 
     /**
@@ -114,6 +115,15 @@ class QWC_Admin {
             'manage_options',
             'qwc-knockout',
             array($this, 'render_knockout')
+        );
+
+        add_submenu_page(
+            'quiniela-worldcup',
+            'Historial',
+            '📚 Historial',
+            'manage_options',
+            'qwc-history',
+            array($this, 'render_history')
         );
 
         add_submenu_page(
@@ -236,6 +246,13 @@ class QWC_Admin {
      */
     public function render_leagues() {
         include QWC_PLUGIN_DIR . 'admin/views/admin-leagues.php';
+    }
+
+    /**
+     * Renderizar Historial
+     */
+    public function render_history() {
+        include QWC_PLUGIN_DIR . 'admin/views/admin-history.php';
     }
 
     /**
@@ -1026,6 +1043,61 @@ class QWC_Admin {
                 'message'   => urlencode("✅ {$result['winners']} ganadores avanzaron a {$result['next_round']}."),
             ), admin_url('admin.php')));
         }
+        exit;
+    }
+
+    /**
+     * Archivar torneo
+     */
+    public function handle_archive_tournament() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_archive_tournament');
+
+        require_once QWC_PLUGIN_DIR . 'includes/class-qwc-history.php';
+
+        $tournament_id     = intval($_POST['tournament_id']);
+        $champion_team_id  = intval($_POST['champion_team_id']);
+        $runner_up_id      = !empty($_POST['runner_up_team_id']) ? intval($_POST['runner_up_team_id']) : null;
+        $third_place_id    = !empty($_POST['third_place_team_id']) ? intval($_POST['third_place_team_id']) : null;
+        $top_scorer_id     = !empty($_POST['top_scorer_team_id']) ? intval($_POST['top_scorer_team_id']) : null;
+        $top_scorer_goals  = !empty($_POST['top_scorer_goals']) ? intval($_POST['top_scorer_goals']) : 0;
+        $mvp_id            = !empty($_POST['mvp_team_id']) ? intval($_POST['mvp_team_id']) : null;
+        $notes             = sanitize_textarea_field($_POST['notes'] ?? '');
+
+        QWC_History::archive_tournament(
+            $tournament_id, $champion_team_id, $runner_up_id, $third_place_id,
+            $top_scorer_id, $top_scorer_goals, $mvp_id, $notes
+        );
+
+        wp_redirect(add_query_arg(array(
+            'page'    => 'qwc-history',
+            'message' => urlencode('✅ Torneo archivado correctamente. Campeón registrado.'),
+        ), admin_url('admin.php')));
+        exit;
+    }
+
+    /**
+     * Desarchivar torneo
+     */
+    public function handle_unarchive_tournament() {
+        if (!current_user_can('manage_options')) {
+            wp_die('No autorizado');
+        }
+
+        check_admin_referer('qwc_unarchive_tournament');
+
+        require_once QWC_PLUGIN_DIR . 'includes/class-qwc-history.php';
+
+        $tournament_id = intval($_POST['tournament_id']);
+        QWC_History::unarchive_tournament($tournament_id);
+
+        wp_redirect(add_query_arg(array(
+            'page'    => 'qwc-history',
+            'message' => urlencode('Torneo desarchivado. Ya se puede editar.'),
+        ), admin_url('admin.php')));
         exit;
     }
 

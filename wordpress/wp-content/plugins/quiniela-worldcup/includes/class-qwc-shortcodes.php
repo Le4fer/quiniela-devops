@@ -9,6 +9,7 @@ class QWC_Shortcodes {
         add_shortcode('qwc_standings', array(__CLASS__, 'render_standings'));
         add_shortcode('qwc_groups', array(__CLASS__, 'render_groups'));
         add_shortcode('quiniela_board', array(__CLASS__, 'render_legacy_board'));
+        add_shortcode('qwc_history', array(__CLASS__, 'render_history'));
     }
 
     public static function render_matches($atts) {
@@ -197,5 +198,11 @@ class QWC_Shortcodes {
 
     public static function render_legacy_board($atts) {
         return '<p>🔄 Este shortcode ha sido actualizado. Usa <code>[qwc_matches]</code> en su lugar.</p>';
+    }
+
+    public static function render_history($atts) {
+        ob_start();
+        include QWC_PLUGIN_DIR . 'public/views/public-history.php';
+        return ob_get_clean();
     }
 }

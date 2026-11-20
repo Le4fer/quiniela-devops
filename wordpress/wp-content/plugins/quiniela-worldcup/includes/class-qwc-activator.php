@@ -50,6 +50,10 @@ class QWC_Activator {
                 'title'   => 'Fase de Grupos',
                 'content' => '[qwc_groups]',
             ),
+            'quiniela-history' => array(
+                'title'   => 'Historial de Torneos',
+                'content' => '[qwc_history]',
+            ),
         );
 
         foreach ($pages as $slug => $page_data) {
