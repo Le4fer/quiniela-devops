@@ -112,53 +112,100 @@ if ($selected_tournament) {
         <hr style="margin: 40px 0;">
 
         <!-- GENERADOR DE ELIMINATORIA -->
-        <h2>⚡ Generar Fase Eliminatoria</h2>
+        <h2>⚡ Generar / Regenerar Fase Eliminatoria</h2>
         <div class="qwc-knockout-controls">
             <p>Esta acción generará automáticamente los cruces de la fase eliminatoria basándose en los 2 mejores de cada grupo.</p>
+            <p style="color: #d63638;"><strong>⚠️ Si ya existe una eliminatoria, será ELIMINADA y reemplazada.</strong></p>
             
             <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block; margin-right: 10px;" 
-                  onsubmit="return confirm('¿Generar fase eliminatoria? Esto creará partidos para Octavos/Cuartos/Semis/Final.');">
-                <input type="hidden" name="action" value="qwc_generate_knockout">
+                onsubmit="return confirm('⚠️ Esto ELIMINARÁ la eliminatoria actual y generará una nueva. ¿Continuar?');">
+                <input type="hidden" name="action" value="qwc_regenerate_knockout">
                 <input type="hidden" name="tournament_id" value="<?php echo intval($selected_tournament); ?>">
                 <input type="hidden" name="num_groups" value="<?php echo count($standings); ?>">
-                <?php wp_nonce_field('qwc_generate_knockout'); ?>
-                <button type="submit" class="button button-primary">🏆 Generar Eliminatoria</button>
+                <?php wp_nonce_field('qwc_regenerate_knockout'); ?>
+                <button type="submit" class="button button-primary">🔄 Regenerar Eliminatoria</button>
             </form>
 
             <?php
-            // Detectar la ronda actual con partidos pendientes
-            // Detectar la ronda actual: la PRIMERA ronda que tenga partidos SIN resultado final
-            // y que tenga equipos definidos (no placeholders con home_team_id = 0)
-            $current_round = $wpdb->get_var($wpdb->prepare(
-                "SELECT DISTINCT m.round 
-                 FROM {$tables['matches']} m
-                 WHERE m.tournament_id = %d 
-                   AND m.group_id IS NULL 
-                   AND m.status IN ('scheduled','live')
-                   AND m.home_team_id > 0
-                   AND m.away_team_id > 0
-                 ORDER BY 
-                   CASE m.round
-                     WHEN 'Octavos de Final' THEN 1
-                     WHEN 'Cuartos de Final' THEN 2
-                     WHEN 'Semifinal' THEN 3
-                     WHEN 'Final' THEN 4
-                     ELSE 5
-                   END ASC
-                 LIMIT 1",
+            // ============================================
+            // DETECCIÓN INTELIGENTE DE RONDA ACTUAL
+            // ============================================
+            $order_rounds = array(
+                'Octavos de Final' => 1,
+                'Cuartos de Final' => 2,
+                'Semifinal'        => 3,
+                'Final'            => 4,
+            );
+            
+            $current_round = null;
+            $next_round_available = false;
+            
+            $all_rounds = $wpdb->get_results($wpdb->prepare(
+                "SELECT DISTINCT round FROM {$tables['matches']} 
+                WHERE tournament_id = %d AND group_id IS NULL
+                ORDER BY match_date ASC",
                 $selected_tournament
             ));
+            
+            foreach ($all_rounds as $r) {
+                $round_name = $r->round;
+                if (!isset($order_rounds[$round_name])) continue;
+                
+                $total = intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$tables['matches']} 
+                    WHERE tournament_id = %d AND round = %s",
+                    $selected_tournament, $round_name
+                )));
+                
+                $finished = intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$tables['matches']} 
+                    WHERE tournament_id = %d AND round = %s AND status = 'finished'",
+                    $selected_tournament, $round_name
+                )));
+                
+                if ($total > 0 && $total === $finished) {
+                    $next_round_name = null;
+                    $current_order = $order_rounds[$round_name];
+                    foreach ($order_rounds as $rn => $ro) {
+                        if ($ro === $current_order + 1) {
+                            $next_round_name = $rn;
+                            break;
+                        }
+                    }
+                    
+                    if ($next_round_name) {
+                        $next_exists = $wpdb->get_var($wpdb->prepare(
+                            "SELECT COUNT(*) FROM {$tables['matches']} 
+                            WHERE tournament_id = %d AND round = %s",
+                            $selected_tournament, $next_round_name
+                        ));
+                        
+                        if ($next_exists > 0) {
+                            $current_round = $round_name;
+                            $next_round_available = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            ?>
 
-            if ($current_round): ?>
-                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block;"
-                      onsubmit="return confirm('¿Avanzar ganadores de <?php echo esc_attr($current_round); ?> a la siguiente ronda?');">
+            <!-- FORMULARIO AVANZAR GANADORES -->
+            <?php if ($current_round && $next_round_available): ?>
+                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block; margin-left: 10px;"
+                    onsubmit="return confirm('¿Avanzar ganadores de <?php echo esc_attr($current_round); ?> a la siguiente ronda?');">
                     <input type="hidden" name="action" value="qwc_advance_knockout">
                     <input type="hidden" name="tournament_id" value="<?php echo intval($selected_tournament); ?>">
                     <input type="hidden" name="current_round" value="<?php echo esc_attr($current_round); ?>">
                     <?php wp_nonce_field('qwc_advance_knockout'); ?>
-                    <button type="submit" class="button button-secondary">➡️ Avanzar Ganadores de "<?php echo esc_html($current_round); ?>"</button>
+                    <button type="submit" class="button button-primary">➡️ Avanzar Ganadores de "<?php echo esc_html($current_round); ?>"</button>
                 </form>
+            <?php elseif ($current_round && !$next_round_available): ?>
+                <p style="color: #00a32a; font-weight: bold; display: inline-block; margin-left: 10px;">✅ ¡Torneo completado! La final ya se jugó. Puedes archivar el torneo en la sección Historial.</p>
+            <?php else: ?>
+                <p style="color: #646970; display: inline-block; margin-left: 10px;">ℹ️ Aún no hay una ronda completa lista para avanzar. Finaliza todos los partidos de una ronda primero.</p>
             <?php endif; ?>
+
         </div>
 
         <hr style="margin: 40px 0;">
