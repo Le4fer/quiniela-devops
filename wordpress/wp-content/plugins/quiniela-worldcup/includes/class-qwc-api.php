@@ -19,6 +19,24 @@ class QWC_API {
             'callback'            => array(__CLASS__, 'get_live_scores'),
             'permission_callback' => '__return_true', // Público: solo muestra marcadores
         ));
+    
+        // Endpoint para seedear datos históricos (solo admin)
+        register_rest_route('qwc/v1', '/seed-historical', array(
+            'methods'             => 'POST',
+            'callback'            => array(__CLASS__, 'seed_historical'),
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ));
+    }
+
+    /**
+     * Seedear datos históricos
+     */
+    public static function seed_historical() {
+        require_once QWC_PLUGIN_DIR . 'includes/class-qwc-seeder.php';
+        QWC_Seeder::seed_historical_tournaments();
+        return rest_ensure_response(array('success' => true, 'message' => 'Datos históricos insertados'));
     }
 
     /**
@@ -51,4 +69,6 @@ class QWC_API {
 
         return rest_ensure_response($matches ? $matches : array());
     }
+
+    
 }

@@ -35,6 +35,7 @@ require_once QWC_PLUGIN_DIR . 'includes/class-qwc-cron.php';
 require_once QWC_PLUGIN_DIR . 'includes/class-qwc-standings.php';
 require_once QWC_PLUGIN_DIR . 'includes/class-qwc-knockout.php';
 require_once QWC_PLUGIN_DIR . 'includes/class-qwc-history.php';
+require_once QWC_PLUGIN_DIR . 'includes/class-qwc-themes.php';
 
 /**
  * Clase principal del plugin

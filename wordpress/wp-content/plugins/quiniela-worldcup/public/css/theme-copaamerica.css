@@ -1,0 +1,61 @@
+/* ============================================
+   TEMA: COPA AMÉRICA
+   Paleta: Rojo CONMEBOL + Amarillo + Verde
+   ============================================ */
+
+body.qwc-theme-copaamerica {
+    background: #FFF5F5;
+}
+
+.qwc-theme-copaamerica .qwc-header {
+    background: linear-gradient(135deg, #E30613 0%, #A00410 100%);
+    color: #FFFFFF;
+}
+
+.qwc-theme-copaamerica .qwc-match-card {
+    border-top: 4px solid #FFD100;
+}
+
+.qwc-theme-copaamerica .qwc-badge-live {
+    background: #E30613;
+}
+
+.qwc-theme-copaamerica .qwc-standings-table th {
+    background: #E30613;
+}
+
+.qwc-theme-copaamerica .qwc-group-block h3 {
+    border-bottom-color: #FFD100;
+    color: #A00410;
+}
+
+.qwc-theme-copaamerica .qwc-pts {
+    color: #E30613;
+}
+
+.qwc-theme-copaamerica .qwc-history-card {
+    border-left-color: #009739;
+}
+
+.qwc-theme-copaamerica .qwc-podium-item.first {
+    background: linear-gradient(180deg, #FFFACD 0%, #FFFFFF 100%);
+    border-color: #FFD100;
+}
+
+.qwc-theme-copaamerica .qwc-dash-stat .stat-num {
+    color: #E30613;
+}
+
+.qwc-theme-copaamerica .qwc-dash-stat .stat-num.points {
+    color: #009739;
+}
+
+/* Patrón decorativo de estrellas (Copa América - 10 estrellas) */
+.qwc-theme-copaamerica .qwc-public-matches::before {
+    content: '🌎 🌟 🌎';
+    display: block;
+    text-align: center;
+    font-size: 20px;
+    margin-bottom: 20px;
+    letter-spacing: 10px;
+}

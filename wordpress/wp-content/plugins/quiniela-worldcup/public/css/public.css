@@ -657,3 +657,166 @@
         margin-top: 10px;
     }
 }
+
+/* ============================================
+   RESPONSIVE MOBILE-FIRST
+   ============================================ */
+
+/* Tablets (768px y menos) */
+@media screen and (max-width: 768px) {
+    .qwc-public-matches,
+    .qwc-standings,
+    .qwc-public-groups,
+    .qwc-public-history,
+    .qwc-public-dashboard {
+        padding: 10px;
+    }
+
+    .qwc-match-card {
+        padding: 15px;
+    }
+
+    .qwc-match-teams {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .qwc-team {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .qwc-team:last-child {
+        flex-direction: row;
+        text-align: left;
+    }
+
+    .qwc-match-score {
+        font-size: 24px;
+        padding: 10px 0;
+    }
+
+    .qwc-score-inputs {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .qwc-score-inputs input[type="number"] {
+        width: 80px;
+        font-size: 20px;
+    }
+
+    .qwc-group-table {
+        font-size: 11px;
+    }
+
+    .qwc-group-table th,
+    .qwc-group-table td {
+        padding: 6px 3px;
+    }
+
+    .qwc-podium {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .qwc-podium-item.first {
+        transform: none;
+        order: 1;
+    }
+
+    .qwc-podium-item.second { order: 2; }
+    .qwc-podium-item.third { order: 3; }
+
+    .qwc-dash-stats {
+        flex-direction: column;
+    }
+
+    .qwc-history-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .qwc-champion-label {
+        margin-left: 0;
+        margin-top: 10px;
+    }
+
+    .qwc-top-champions {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Celulares pequeños (480px y menos) */
+@media screen and (max-width: 480px) {
+    .qwc-match-card {
+        padding: 10px;
+    }
+
+    .qwc-team-name {
+        font-size: 14px;
+    }
+
+    .qwc-flag {
+        width: 20px;
+        height: 14px;
+    }
+
+    .qwc-group-table {
+        font-size: 10px;
+    }
+
+    .qwc-group-table th,
+    .qwc-group-table td {
+        padding: 4px 2px;
+    }
+
+    .qwc-standings-table th,
+    .qwc-standings-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+
+    .qwc-podium-item .qwc-flag-large {
+        width: 60px;
+        height: 40px;
+    }
+
+    .qwc-podium-item .medal {
+        font-size: 30px;
+    }
+
+    .qwc-history-year {
+        font-size: 18px;
+    }
+}
+
+/* ============================================
+   OPTIMIZACIONES DE RENDIMIENTO
+   ============================================ */
+
+/* Lazy loading para banderas */
+.qwc-flag,
+.qwc-flag-large {
+    loading: lazy;
+}
+
+/* Transiciones suaves */
+.qwc-match-card,
+.qwc-group-block,
+.qwc-history-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Reducir motion para usuarios que lo prefieren */
+@media (prefers-reduced-motion: reduce) {
+    .qwc-match-card,
+    .qwc-group-block,
+    .qwc-history-card {
+        transition: none;
+    }
+
+    .qwc-badge-live {
+        animation: none;
+    }
+}
