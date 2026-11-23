@@ -128,7 +128,7 @@ if ($selected_tournament) {
 
             <?php
             // ============================================
-            // DETECCIÓN INTELIGENTE DE RONDA ACTUAL
+            // DETECCIÓN INTELIGENTE DE RONDA ACTUAL (CORREGIDA)
             // ============================================
             $order_rounds = array(
                 'Octavos de Final' => 1,
@@ -136,54 +136,75 @@ if ($selected_tournament) {
                 'Semifinal'        => 3,
                 'Final'            => 4,
             );
-            
+
             $current_round = null;
-            $next_round_available = false;
-            
+            $next_round_name = null;
+
+            // Obtener todas las rondas del torneo
             $all_rounds = $wpdb->get_results($wpdb->prepare(
-                "SELECT DISTINCT round FROM {$tables['matches']} 
+                "SELECT DISTINCT round FROM {$tables['matches']}
                 WHERE tournament_id = %d AND group_id IS NULL
                 ORDER BY match_date ASC",
                 $selected_tournament
             ));
-            
+
+            // Recorrer todas las rondas en orden y encontrar la ÚLTIMA completada
             foreach ($all_rounds as $r) {
                 $round_name = $r->round;
                 if (!isset($order_rounds[$round_name])) continue;
-                
+
                 $total = intval($wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$tables['matches']} 
+                    "SELECT COUNT(*) FROM {$tables['matches']}
                     WHERE tournament_id = %d AND round = %s",
                     $selected_tournament, $round_name
                 )));
-                
+
                 $finished = intval($wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM {$tables['matches']} 
+                    "SELECT COUNT(*) FROM {$tables['matches']}
                     WHERE tournament_id = %d AND round = %s AND status = 'finished'",
                     $selected_tournament, $round_name
                 )));
-                
+
+                // Si esta ronda está completamente finalizada
                 if ($total > 0 && $total === $finished) {
-                    $next_round_name = null;
+                    // Buscar el nombre de la siguiente ronda
                     $current_order = $order_rounds[$round_name];
+                    $next_round_name = null;
+                    
                     foreach ($order_rounds as $rn => $ro) {
                         if ($ro === $current_order + 1) {
                             $next_round_name = $rn;
                             break;
                         }
                     }
-                    
+
+                    // Si existe una siguiente ronda Y tiene partidos creados
                     if ($next_round_name) {
                         $next_exists = $wpdb->get_var($wpdb->prepare(
-                            "SELECT COUNT(*) FROM {$tables['matches']} 
+                            "SELECT COUNT(*) FROM {$tables['matches']}
                             WHERE tournament_id = %d AND round = %s",
                             $selected_tournament, $next_round_name
                         ));
-                        
+
                         if ($next_exists > 0) {
-                            $current_round = $round_name;
-                            $next_round_available = true;
-                            break;
+                            // Verificar si la siguiente ronda YA está completa también
+                            $next_total = intval($wpdb->get_var($wpdb->prepare(
+                                "SELECT COUNT(*) FROM {$tables['matches']}
+                                WHERE tournament_id = %d AND round = %s",
+                                $selected_tournament, $next_round_name
+                            )));
+
+                            $next_finished = intval($wpdb->get_var($wpdb->prepare(
+                                "SELECT COUNT(*) FROM {$tables['matches']}
+                                WHERE tournament_id = %d AND round = %s AND status = 'finished'",
+                                $selected_tournament, $next_round_name
+                            )));
+
+                            // Si la siguiente ronda NO está completa, esta es la ronda actual
+                            if ($next_total !== $next_finished) {
+                                $current_round = $round_name;
+                            }
+                            // Si está completa, continuar el bucle para verificar la siguiente
                         }
                     }
                 }
@@ -191,21 +212,35 @@ if ($selected_tournament) {
             ?>
 
             <!-- FORMULARIO AVANZAR GANADORES -->
-            <?php if ($current_round && $next_round_available): ?>
-                <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block; margin-left: 10px;"
-                    onsubmit="return confirm('¿Avanzar ganadores de <?php echo esc_attr($current_round); ?> a la siguiente ronda?');">
-                    <input type="hidden" name="action" value="qwc_advance_knockout">
-                    <input type="hidden" name="tournament_id" value="<?php echo intval($selected_tournament); ?>">
-                    <input type="hidden" name="current_round" value="<?php echo esc_attr($current_round); ?>">
-                    <?php wp_nonce_field('qwc_advance_knockout'); ?>
-                    <button type="submit" class="button button-primary">➡️ Avanzar Ganadores de "<?php echo esc_html($current_round); ?>"</button>
-                </form>
-            <?php elseif ($current_round && !$next_round_available): ?>
-                <p style="color: #00a32a; font-weight: bold; display: inline-block; margin-left: 10px;">✅ ¡Torneo completado! La final ya se jugó. Puedes archivar el torneo en la sección Historial.</p>
-            <?php else: ?>
-                <p style="color: #646970; display: inline-block; margin-left: 10px;">ℹ️ Aún no hay una ronda completa lista para avanzar. Finaliza todos los partidos de una ronda primero.</p>
-            <?php endif; ?>
+            <?php if ($current_round && $next_round_name): ?>
+            <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display:inline-block; margin-left: 10px;"
+                onsubmit="return confirm('¿Avanzar ganadores de <?php echo esc_attr($current_round); ?> a <?php echo esc_attr($next_round_name); ?>?');">
+                <input type="hidden" name="action" value="qwc_advance_knockout">
+                <input type="hidden" name="tournament_id" value="<?php echo intval($selected_tournament); ?>">
+                <input type="hidden" name="current_round" value="<?php echo esc_attr($current_round); ?>">
+                <?php wp_nonce_field('qwc_advance_knockout'); ?>
+                <button type="submit" class="button button-primary">➡️ Avanzar Ganadores de "<?php echo esc_html($current_round); ?>"</button>
+            </form>
+            <?php elseif (!$current_round && $next_round_name === null): ?>
+                <?php
+                // Verificar si es porque la Final ya está completada
+                $final_total = intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$tables['matches']}
+                    WHERE tournament_id = %d AND round = 'Final'",
+                    $selected_tournament
+                )));
+                $final_finished = intval($wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$tables['matches']}
+                    WHERE tournament_id = %d AND round = 'Final' AND status = 'finished'",
+                    $selected_tournament
+                )));
 
+                if ($final_total > 0 && $final_total === $final_finished): ?>
+                    <p style="color: #00a32a; font-weight: bold; display: inline-block; margin-left: 10px;">✅ ¡Torneo completado! La final ya se jugó. Puedes archivar el torneo en la sección Historial.</p>
+                <?php else: ?>
+                    <p style="color: #646970; display: inline-block; margin-left: 10px;">ℹ️ Aún no hay una ronda completa lista para avanzar. Finaliza todos los partidos de una ronda primero.</p>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
 
         <hr style="margin: 40px 0;">
